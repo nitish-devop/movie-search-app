@@ -5,12 +5,13 @@ type Genre = {
 
 type GenereListProps = {
     genres: Genre[];
+    error: string | null;
     selectedGenreId: number | null;
     onSelectGenre: (genre: Genre) => void;
     onClearGenre: () => void;
 }
 
-function GenereList({ genres, selectedGenreId, onSelectGenre, onClearGenre }: GenereListProps) {
+function GenereList({ genres, error, selectedGenreId, onSelectGenre, onClearGenre }: GenereListProps) {
     return (
         <div className="w-full bg-neutral-950 py-3 px-4 border-y border-neutral-800">
             <div className="flex flex-nowrap overflow-x-auto gap-3 scrollbar-none snap-x snap-mandatory">
@@ -24,7 +25,13 @@ function GenereList({ genres, selectedGenreId, onSelectGenre, onClearGenre }: Ge
                     All
                 </button>
 
-                {genres.map((genre) => (
+                {error && (
+                    <span className="py-2 px-4 text-sm text-red-300 flex-shrink-0">
+                        {error}
+                    </span>
+                )}
+
+                {!error && genres.map((genre) => (
                     <button 
                         type="button"
                         onClick={() => onSelectGenre(genre)}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createTmdbRequest } from "../api/tmdb";
 
 // 1. Explicitly typing the TMDB details response schema
 interface Genre {
@@ -32,17 +33,12 @@ function MovieDetails({ movieId }: MovieDetailsProps) {
             setLoading(true);
             setError(null);
             
-            const options = {
-                method: 'GET',
-                headers: {
-                    accept: 'application/json',
-                    Authorization: `Bearer ${import.meta.env.VITE_TMDB_ACCESS_TOKEN}`
-                }
-            };
-
             try {
                 // Hits the precise path mapping to https://api.themoviedb.org/3/movie/1057265
-                const response = await fetch(`https://api.themoviedb.org/3/movie/${movieId}?language=en-US`, options);
+                const { url, options } = createTmdbRequest(`movie/${movieId}`, {
+                    language: "en-US",
+                });
+                const response = await fetch(url, options);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch movie data (Status: ${response.status})`);

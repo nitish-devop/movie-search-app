@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { createTmdbRequest, type TmdbParams } from "../api/tmdb";
 
 type MovieSectionProps = {
     title: string;
@@ -13,6 +14,7 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
     const [, setPage] = useState<number>(1);
     const [hasMore, setHasMore] = useState<boolean>(true);
     const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Observer reference to watch the last movie card
     const observer = useRef<IntersectionObserver | null>(null);
@@ -26,43 +28,46 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
         loadingRef.current = true;
         setLoading(true);
 
-        const options = {
-            method: 'GET',
-            headers: {
-                accept: 'application/json',
-                Authorization: `Bearer ${import.meta.env.VITE_TMDB_ACCESS_TOKEN}`
-            }
-        };
-
         try {
-            const params = new URLSearchParams({
+            const params: TmdbParams = {
                 region: "IN",
-                page: String(pageNum),
-            });
+                page: pageNum,
+            };
             const endpoint = genreId
                 ? (() => {
-                    params.set("include_adult", "false");
-                    params.set("sort_by", "popularity.desc");
-                    params.set("with_genres", String(genreId));
+                    params.include_adult = false;
+                    params.sort_by = "popularity.desc";
+                    params.with_genres = genreId;
                     return "discover/movie";
                 })()
                 : `movie/${slug}`;
 
-            const response = await fetch(`https://api.themoviedb.org/3/${endpoint}?${params.toString()}`, options);
+            const { url, options } = createTmdbRequest(endpoint, params);
+            const response = await fetch(url, options);
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch ${title} movies (Status: ${response.status})`);
+            }
+
             const data = await response.json();
             
-            if (data.results && data.results.length > 0) {
+            if (Array.isArray(data.results) && data.results.length > 0) {
                 // Append new movies to the existing array
                 setMovies(prevMovies => pageNum === 1 ? data.results : [...prevMovies, ...data.results]);
                 // TMDB provides total_pages. Check if we hit the limit
                 hasMoreRef.current = pageNum < data.total_pages;
                 setHasMore(pageNum < data.total_pages);
+                setError(null);
             } else {
                 hasMoreRef.current = false;
                 setHasMore(false);
             }
         } catch (error) {
             console.error(`Error fetching ${slug} movies on page ${pageNum}:`, error);
+            setMovies([]);
+            setError("Could not load movies. Please check your TMDB API credentials.");
+            hasMoreRef.current = false;
+            setHasMore(false);
         } finally {
             loadingRef.current = false;
             setLoading(false);
@@ -72,6 +77,7 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
     // Reset everything when the category/slug changes
     useEffect(() => {
         setMovies([]);
+        setError(null);
         setPage(1);
         hasMoreRef.current = true;
         setHasMore(true);
@@ -109,6 +115,10 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
             
             {/* Horizontal Scroll Layout */}
             <div className={`scroll-container-${sectionKey} flex gap-4 overflow-x-auto scrollbar-none px-4 pb-2 snap-x snap-mandatory`}>
+                {error && (
+                    <p className="text-sm text-red-300 py-6">{error}</p>
+                )}
+
                 {movies.map((movie, index) => {
                     const isLastElement = movies.length === index + 1;
                     return (

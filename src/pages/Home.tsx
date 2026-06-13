@@ -10,15 +10,17 @@ type Genre = {
 
 interface HomeProps {
   genres: Genre[];
+  genresError: string | null;
 }
 
-function Home({ genres }: HomeProps) {
+function Home({ genres, genresError }: HomeProps) {
   const [selectedGenre, setSelectedGenre] = useState<Genre | null>(null);
 
   return (
     <div className="animate-fadeIn">
       <GenereList
         genres={genres}
+        error={genresError}
         selectedGenreId={selectedGenre?.id ?? null}
         onSelectGenre={setSelectedGenre}
         onClearGenre={() => setSelectedGenre(null)}
