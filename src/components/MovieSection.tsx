@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { createTmdbRequest, type TmdbParams } from "../api/tmdb";
+import { createTmdbRequest, hasTmdbApiKey, TMDB_CONFIG_ERROR, type TmdbParams } from "../api/tmdb";
 
 type MovieSectionProps = {
     title: string;
@@ -25,6 +25,16 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
     // Fetch implementation
     const fetchMovies = useCallback(async (pageNum: number) => {
         if (loadingRef.current || (!hasMoreRef.current && pageNum !== 1)) return;
+
+        if (!hasTmdbApiKey()) {
+            setMovies([]);
+            setError(TMDB_CONFIG_ERROR);
+            hasMoreRef.current = false;
+            setHasMore(false);
+            setLoading(false);
+            return;
+        }
+
         loadingRef.current = true;
         setLoading(true);
 
@@ -63,7 +73,9 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
                 setHasMore(false);
             }
         } catch (error) {
-            console.error(`Error fetching ${slug} movies on page ${pageNum}:`, error);
+            if (import.meta.env.DEV) {
+                console.error(`Error fetching ${slug} movies on page ${pageNum}:`, error);
+            }
             setMovies([]);
             setError("Could not load movies. Please check your TMDB API credentials.");
             hasMoreRef.current = false;

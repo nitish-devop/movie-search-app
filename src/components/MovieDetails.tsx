@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createTmdbRequest } from "../api/tmdb";
+import { createTmdbRequest, hasTmdbApiKey, TMDB_CONFIG_ERROR } from "../api/tmdb";
 
 // 1. Explicitly typing the TMDB details response schema
 interface Genre {
@@ -32,6 +32,12 @@ function MovieDetails({ movieId }: MovieDetailsProps) {
         const fetchMovieDetails = async () => {
             setLoading(true);
             setError(null);
+
+            if (!hasTmdbApiKey()) {
+                setError(TMDB_CONFIG_ERROR);
+                setLoading(false);
+                return;
+            }
             
             try {
                 // Hits the precise path mapping to https://api.themoviedb.org/3/movie/1057265
@@ -47,7 +53,9 @@ function MovieDetails({ movieId }: MovieDetailsProps) {
                 const data = await response.json();
                 setMovie(data);
             } catch (err: any) {
-                console.error("Error loading movie detail parameters:", err);
+                if (import.meta.env.DEV) {
+                    console.error("Error loading movie detail parameters:", err);
+                }
                 setError(err.message || "An unexpected system fault occurred.");
             } finally {
                 setLoading(false);

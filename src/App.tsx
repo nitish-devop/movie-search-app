@@ -1,7 +1,7 @@
 // src/App.tsx
 import { useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { createTmdbRequest } from "./api/tmdb";
+import { createTmdbRequest, hasTmdbApiKey, TMDB_CONFIG_ERROR } from "./api/tmdb";
 import Navbar from "./components/Header";
 import Home from "./pages/Home";
 import MovieDetailPage from "./pages/MovieDetailPage";
@@ -12,6 +12,12 @@ function App() {
 
   useEffect(() => {
     const fetchGenres = async () => {
+      if (!hasTmdbApiKey()) {
+        setGenres([]);
+        setGenresError(TMDB_CONFIG_ERROR);
+        return;
+      }
+
       try {
         const { url, options } = createTmdbRequest("genre/movie/list");
         const response = await fetch(url, options);
@@ -24,7 +30,9 @@ function App() {
         setGenres(Array.isArray(data.genres) ? data.genres : []);
         setGenresError(null);
       } catch (error) {
-        console.error('Error fetching genres:', error);
+        if (import.meta.env.DEV) {
+          console.error('Error fetching genres:', error);
+        }
         setGenres([]);
         setGenresError("Could not load movie genres. Please check your TMDB API credentials.");
       }
