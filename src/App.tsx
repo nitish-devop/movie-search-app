@@ -6,9 +6,15 @@ import Navbar from "./components/Header";
 import Home from "./pages/Home";
 import MovieDetailPage from "./pages/MovieDetailPage";
 
+type Genre = {
+  id: number;
+  name: string;
+}
+
 function App() {
-  const [genres, setGenres] = useState<any[]>([]);
+  const [genres, setGenres] = useState<Genre[]>([]);
   const [genresError, setGenresError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   useEffect(() => {
     const fetchGenres = async () => {
@@ -43,13 +49,13 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen text-white">
         {/* Navbar stays sticky across all individual sub-page re-renders */}
-        <Navbar />
+        <Navbar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
         
         <Routes>
           {/* Main Landing Route Dashboard Dashboard */}
-          <Route path="/" element={<Home genres={genres} genresError={genresError} />} />
+          <Route path="/" element={<Home genres={genres} genresError={genresError} searchQuery={searchQuery} />} />
           
           {/* Dynamic Details Page Identifier Matching Route Parameter */}
           <Route path="/movie/:id" element={<MovieDetailPage />} />

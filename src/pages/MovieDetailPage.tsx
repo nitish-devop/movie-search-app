@@ -8,7 +8,7 @@ function MovieDetailPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-4xl mx-auto px-4 pt-6 animate-fadeIn">
+    <div className="max-w-5xl mx-auto px-4 pt-6 animate-fadeIn">
       {/* Back Button utilizes native router history to step backward */}
       <button 
         onClick={() => navigate(-1)} 

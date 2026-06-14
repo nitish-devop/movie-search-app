@@ -1,17 +1,34 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createTmdbRequest, hasTmdbApiKey, TMDB_CONFIG_ERROR, type TmdbParams } from "../api/tmdb";
+import type { MovieFilters } from "./FilterSidebar";
+
+type Movie = {
+    id: number;
+    title: string;
+    poster_path: string | null;
+    release_date: string;
+}
 
 type MovieSectionProps = {
     title: string;
     slug: string;
     genreId?: number;
+    filters?: MovieFilters;
+    searchQuery?: string;
+    layout?: "row" | "grid";
 }
 
-function MovieSection({ title, slug, genreId }: MovieSectionProps) {  
+const defaultFilters: MovieFilters = {
+    sortBy: "popularity.desc",
+    year: "",
+    minRating: "",
+    language: "",
+};
+
+function MovieSection({ title, slug, genreId, filters = defaultFilters, searchQuery = "", layout = "row" }: MovieSectionProps) {  
     const navigate = useNavigate();
-    const [movies, setMovies] = useState<any[]>([]);
-    const [, setPage] = useState<number>(1);
+    const [movies, setMovies] = useState<Movie[]>([]);
     const [hasMore, setHasMore] = useState<boolean>(true);
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
@@ -20,7 +37,24 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
     const observer = useRef<IntersectionObserver | null>(null);
     const loadingRef = useRef<boolean>(false);
     const hasMoreRef = useRef<boolean>(true);
-    const sectionKey = genreId ? `genre-${genreId}` : slug;
+    const pageRef = useRef<number>(1);
+    const activeSortBy = filters.sortBy || defaultFilters.sortBy;
+    const activeYear = filters.year.trim();
+    const activeMinRating = filters.minRating;
+    const activeLanguage = filters.language;
+    const activeSearchQuery = searchQuery.trim();
+    const hasSearchQuery = activeSearchQuery.length > 0;
+    const hasDiscoverFilters = Boolean(genreId || activeYear || activeMinRating || activeLanguage || activeSortBy !== defaultFilters.sortBy);
+    const sectionKey = [
+        slug,
+        activeSearchQuery || "no-search",
+        genreId ?? "all",
+        activeSortBy,
+        activeYear || "any-year",
+        activeMinRating || "any-rating",
+        activeLanguage || "any-language",
+    ].join("-");
+    const isGridLayout = layout === "grid";
 
     // Fetch implementation
     const fetchMovies = useCallback(async (pageNum: number) => {
@@ -38,16 +72,41 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
         loadingRef.current = true;
         setLoading(true);
 
+        if (pageNum === 1) {
+            pageRef.current = 1;
+            setMovies([]);
+            setError(null);
+            hasMoreRef.current = true;
+            setHasMore(true);
+        }
+
         try {
             const params: TmdbParams = {
                 region: "IN",
                 page: pageNum,
             };
-            const endpoint = genreId
+            const endpoint = hasSearchQuery
+                ? (() => {
+                    params.query = activeSearchQuery;
+                    params.include_adult = false;
+                    return "search/movie";
+                })()
+                : hasDiscoverFilters
                 ? (() => {
                     params.include_adult = false;
-                    params.sort_by = "popularity.desc";
-                    params.with_genres = genreId;
+                    params.sort_by = activeSortBy;
+                    if (genreId) {
+                        params.with_genres = genreId;
+                    }
+                    if (activeYear) {
+                        params.primary_release_year = activeYear;
+                    }
+                    if (activeMinRating) {
+                        params["vote_average.gte"] = activeMinRating;
+                    }
+                    if (activeLanguage) {
+                        params.with_original_language = activeLanguage;
+                    }
                     return "discover/movie";
                 })()
                 : `movie/${slug}`;
@@ -84,17 +143,18 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
             loadingRef.current = false;
             setLoading(false);
         }
-    }, [slug, genreId]);
+    }, [slug, genreId, title, hasSearchQuery, activeSearchQuery, hasDiscoverFilters, activeSortBy, activeYear, activeMinRating, activeLanguage]);
 
     // Reset everything when the category/slug changes
     useEffect(() => {
-        setMovies([]);
-        setError(null);
-        setPage(1);
         hasMoreRef.current = true;
-        setHasMore(true);
-        // Fetch page 1 initially
-        fetchMovies(1);
+        const fetchTimer = window.setTimeout(() => {
+            fetchMovies(1);
+        }, 0);
+
+        return () => {
+            window.clearTimeout(fetchTimer);
+        };
     }, [sectionKey, fetchMovies]);
 
     // React callback ref to target the very last rendered movie element
@@ -105,30 +165,38 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
         observer.current = new IntersectionObserver(entries => {
             // If the last card enters the viewport threshold, load the next page
             if (entries[0].isIntersecting && hasMore) {
-                setPage(prevPage => {
-                    const nextPage = prevPage + 1;
-                    fetchMovies(nextPage);
-                    return nextPage;
-                });
+                pageRef.current += 1;
+                fetchMovies(pageRef.current);
             }
-        }, {
+        }, isGridLayout ? {
+            root: null,
+            rootMargin: "300px 0px"
+        } : {
             root: document.querySelector(`.scroll-container-${sectionKey}`), // Scours relative to this wrapper container
             rootMargin: "0px 300px 0px 0px" // Triggers load 300px BEFORE the user hits the actual end
         });
 
         if (node) observer.current.observe(node);
-    }, [loading, hasMore, fetchMovies, sectionKey]);
+    }, [loading, hasMore, fetchMovies, sectionKey, isGridLayout]);
+
+    const movieListClassName = isGridLayout
+        ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-7 px-4 pb-8"
+        : `scroll-container-${sectionKey} flex gap-4 overflow-x-auto scrollbar-none px-4 pb-2 snap-x snap-mandatory`;
+    const skeletonCount = isGridLayout ? 12 : 3;
 
     return (
-        <section className="movie-section my-6">
+        <section className={`movie-section ${isGridLayout ? "my-8" : "my-6"}`}>
             <div className="flex justify-between items-center mb-4 px-4">
                 <h2 className="text-lg font-semibold">{title}</h2>
             </div>
             
-            {/* Horizontal Scroll Layout */}
-            <div className={`scroll-container-${sectionKey} flex gap-4 overflow-x-auto scrollbar-none px-4 pb-2 snap-x snap-mandatory`}>
+            <div className={movieListClassName}>
                 {error && (
                     <p className="text-sm text-red-300 py-6">{error}</p>
+                )}
+
+                {!error && !loading && movies.length === 0 && (
+                    <p className="text-sm text-gray-500 py-6">No movies found.</p>
                 )}
 
                 {movies.map((movie, index) => {
@@ -138,7 +206,9 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
                             key={`${movie.id}-${index}`} // Prevents duplicate key errors if data cross-over happens
                             ref={isLastElement ? lastMovieElementRef : null} 
                             onClick={() => navigate(`/movie/${movie.id}`)}
-                            className="movie-card w-40 flex-shrink-0 snap-start transition-transform active:scale-95 cursor-pointer"
+                            className={`movie-card transition-transform active:scale-95 cursor-pointer ${
+                                isGridLayout ? "w-full" : "w-40 flex-shrink-0 snap-start"
+                            }`}
                             role="button"
                             tabIndex={0}
                             onKeyDown={(event) => {
@@ -150,7 +220,9 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
                             <img 
                                 src={movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : 'https://placehold.co/500x750?text=No+Poster'} 
                                 alt={movie.title} 
-                                className="w-full h-60 object-cover rounded-md mb-2 shadow-sm" 
+                                className={`w-full object-cover rounded-md mb-2 shadow-sm ${
+                                    isGridLayout ? "aspect-[2/3]" : "h-60"
+                                }`}
                             />
                             <h3 className="text-sm font-medium line-clamp-1">{movie.title}</h3>
                             <p className="text-xs text-gray-500">
@@ -160,14 +232,18 @@ function MovieSection({ title, slug, genreId }: MovieSectionProps) {
                     );
                 })}
 
-                {/* Optional Skeleton loading card placeholder at the end */}
-                {loading && (
-                    <div className="w-40 flex-shrink-0 animate-pulse">
-                        <div className="w-full h-60 bg-gray-300 dark:bg-gray-700 rounded-md mb-2"></div>
-                        <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-3/4 mb-1"></div>
-                        <div className="h-3 bg-gray-300 dark:bg-gray-700 rounded w-1/2"></div>
+                {loading && Array.from({ length: skeletonCount }, (_, index) => (
+                    <div
+                        key={`movie-skeleton-${sectionKey}-${index}`}
+                        className={isGridLayout ? "w-full" : "w-40 flex-shrink-0"}
+                    >
+                        <div className={`w-full shimmer rounded-md mb-2 ${
+                            isGridLayout ? "aspect-[2/3]" : "h-60"
+                        }`}></div>
+                        <div className="h-4 shimmer rounded w-3/4 mb-1"></div>
+                        <div className="h-3 shimmer rounded w-1/2"></div>
                     </div>
-                )}
+                ))}
             </div>
         </section>
     );
